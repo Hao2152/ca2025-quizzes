@@ -1,9 +1,11 @@
 .data
-# Two IEEE754 float32 values as raw bits (change them as you like)
-in_a:        .word 0x40800000     # 1.5f
-in_b:        .word 0x40600000     # 0.5f
+test_count:   .word 4
+test_inputs:
+    .word 0x40800000, 0x40000000     # 1: 4.0, 2.0
+    .word 0x41100000, 0x40400000     # 2: 9.0, 3.0
+    .word 0x7F7FFFFF, 0x40000000     # 3: 3.4028235e38, 2.0
+    .word 0x3F800000, 0x00000000     # 4: 1.0, 0.0
 
-msg_title:   .string "=== Problem C: IEEE754 -> BF16, then + - * / ===\n"
 msg_a:       .string "A (f32 hex): 0x"
 msg_b:       .string "B (f32 hex): 0x"
 msg_to_bf16: .string " -> BF16: 0x"
@@ -41,17 +43,17 @@ BF16_EXP_BIAS:   .word 127
 # main
 ############################################################################################
 main:
-    # print title
-    la   a0, msg_title
-    li   a7, 4
-    ecall
+    la   s11, test_inputs      # s11 = (a,b) 指標
+    la   t3, test_count
+    lw   s10, 0(t3)            # s10 = 總筆數
+    li   s9, 0                 # s9 = index
 
-    # load inputs
-    la   t0, in_a
-    lw   s0, 0(t0)        # s0 = IEEE754 bits of A
-    la   t0, in_b
-    lw   s1, 0(t0)        # s1 = IEEE754 bits of B
+main_loop:
+    beq  s9, s10, main_done
 
+    lw   s0, 0(s11)            # load a
+    lw   s1, 4(s11)            # load b
+    
     # --- Print A IEEE754 hex and its BF16 ---
     la   a0, msg_a
     li   a7, 4
@@ -66,11 +68,10 @@ main:
 
     mv   a0, s0
     jal  ra, f32_to_bf16
-    mv   s2, a0                 # s2 = A_bf16 (u16 in low bits)
+    mv   s2, a0                 # s2 = A_bf16
 
     mv   a0, s2
     jal  ra, print_hex16bits
-
     # print flags for A
     la   a0, msg_flags
     li   a7, 4
@@ -223,11 +224,21 @@ main:
     la   a0, msg_endflag
     li   a7, 4
     ecall
-
-    # End
-    li   a7, 10
+    
+    la   a0, nl
+    li   a7, 4
+    ecall
+    la   a0, nl
+    li   a7, 4
     ecall
 
+    addi s9,  s9,  1           # index++
+    addi s11, s11, 8           # 下一筆
+    j    main_loop
+
+main_done:
+    li   a7, 10
+    ecall
 ############################################################################################
 # Helpers: print_bf16_flags(a0=bf16bits) -> prints "zero"/"inf"/"nan"/"normal"
 ############################################################################################
