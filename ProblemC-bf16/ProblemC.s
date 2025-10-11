@@ -3,7 +3,7 @@ test_count:   .word 4
 test_inputs:
     .word 0x40800000, 0x40000000     # 1: 4.0, 2.0
     .word 0x41100000, 0x40400000     # 2: 9.0, 3.0
-    .word 0x7F7FFFFF, 0x40000000     # 3: 3.4028235e38, 2.0
+    .word 0x7F7FFFFF, 0x40000000     # 3: inf, 2.0
     .word 0x3F800000, 0x00000000     # 4: 1.0, 0.0
 
 msg_a:       .string "A (f32 hex): 0x"
@@ -54,7 +54,7 @@ main_loop:
     lw   s0, 0(s11)            # load a
     lw   s1, 4(s11)            # load b
     
-    # --- Print A IEEE754 hex and its BF16 ---
+    # --- Print A IEEE754(0xFFFFFFFF) hex and its BF16(0xFFFF) ---
     la   a0, msg_a
     li   a7, 4
     ecall
@@ -82,7 +82,7 @@ main_loop:
     li   a7, 4
     ecall
 
-    # --- Print B IEEE754 hex and its BF16 ---
+    # --- Print B IEEE754(0xFFFFFFFF) hex and its BF16(0xFFFF) ---
     la   a0, msg_b
     li   a7, 4
     ecall
@@ -300,7 +300,6 @@ done_flags:
 
 ############################################################################################
 # f32_to_bf16(a0 = u32 f32bits) -> a0 = u16 bf16bits
-# Mirrors C:
 # if (exp==0xFF) return high16; else round-to-nearest-even on low16 then >>16
 ############################################################################################
 f32_to_bf16:
@@ -341,73 +340,6 @@ f_ret:
     lw    ra, 12(sp)
     addi  sp, sp, 16
     ret
-
-############################################################################################
-# bf16_isnan(a0=bf16) -> a0=1/0
-############################################################################################
-bf16_isnan:
-    # ((bits & 0x7F80) == 0x7F80) && (bits & 0x007F)
-    addi  sp, sp, -8
-    sw    t0, 4(sp)
-    sw    t1, 0(sp)
-    mv    t0, a0
-    li    t1, 0x7F80
-    and   t0, t0, t1
-    bne   t0, t1, nan_no
-    mv    t0, a0
-    andi  t0, t0, 0x007F
-    beqz  t0, nan_no
-    li    a0, 1
-    j     nan_out
-nan_no:
-    li    a0, 0
-nan_out:
-    lw    t1, 0(sp)
-    lw    t0, 4(sp)
-    addi  sp, sp, 8
-    ret
-
-############################################################################################
-# bf16_isinf(a0=bf16) -> a0=1/0
-############################################################################################
-bf16_isinf:
-    addi  sp, sp, -8
-    sw    t0, 4(sp)
-    sw    t1, 0(sp)
-    mv    t0, a0
-    li    t1, 0x7F80
-    and   t0, t0, t1
-    bne   t0, t1, inf_no
-    mv    t0, a0
-    andi  t0, t0, 0x007F
-    bnez  t0, inf_no
-    li    a0, 1
-    j     inf_out
-inf_no:
-    li    a0, 0
-inf_out:
-    lw    t1, 0(sp)
-    lw    t0, 4(sp)
-    addi  sp, sp, 8
-    ret
-
-############################################################################################
-# bf16_iszero(a0=bf16) -> a0=1/0
-############################################################################################
-bf16_iszero:
-    addi  sp, sp, -4
-    sw    t0, 0(sp)
-    mv    t0, a0
-    li    a0, 0x7FFF
-    and   t0, t0, a0
-    li    a0, 0
-    bnez  t0, z_out
-    li    a0, 1
-z_out:
-    lw    t0, 0(sp)
-    addi  sp, sp, 4
-    ret
-
 ############################################################################################
 # bf16_add(a0=a, a1=b) -> a0=result   (integer-only emulate, mirrors your C)
 ############################################################################################
